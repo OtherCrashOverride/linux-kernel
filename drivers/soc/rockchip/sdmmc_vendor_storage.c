@@ -88,7 +88,7 @@ static int mtd_vendor_ops(u8 *buffer, u32 addr, u32 n_sec, int write)
 	size_t retlen;
 	u32 ret = -1;
 
-	mtd = get_mtd_device_nm("spi32766.0");
+	mtd = get_mtd_device_nm("vendor");
 	if (mtd == NULL)
 		return -1;
 
