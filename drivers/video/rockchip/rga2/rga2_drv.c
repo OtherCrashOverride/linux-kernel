@@ -46,6 +46,10 @@
 #include <linux/pm_runtime.h>
 #include <linux/dma-buf.h>
 
+#if defined(CONFIG_ARM64)
+#include <asm/cacheflush.h>
+#endif
+
 #include "rga2.h"
 #include "rga2_reg_info.h"
 #include "rga2_mmu_info.h"
@@ -695,18 +699,22 @@ static int rga2_get_img_info(rga_img_info_t *img,
 			     struct dma_buf_attachment **pattach)
 {
 	struct dma_buf_attachment *attach = NULL;
-	struct ion_client *ion_client = NULL;
-	struct ion_handle *hdl = NULL;
 	struct device *rga_dev = NULL;
 	struct sg_table *sgt = NULL;
 	struct dma_buf *dma_buf = NULL;
 	u32 vir_w, vir_h;
+#if defined(CONFIG_ION_ROCKCHIP)
+	struct ion_client *ion_client = NULL;
+	struct ion_handle *hdl = NULL;
 	ion_phys_addr_t phy_addr;
 	size_t len = 0;
+#endif
 	int yrgb_addr = -1;
 	int ret = 0;
 
+#if defined(CONFIG_ION_ROCKCHIP)
 	ion_client = rga2_drvdata->ion_client;
+#endif
 	rga_dev = rga2_drvdata->dev;
 	yrgb_addr = (int)img->yrgb_addr;
 	vir_w = img->vir_w;
@@ -742,6 +750,7 @@ static int rga2_get_img_info(rga_img_info_t *img,
 				goto err_get_sg;
 			}
 		} else {
+#if defined(CONFIG_ION_ROCKCHIP)
 			hdl = ion_import_dma_buf(ion_client, img->yrgb_addr);
 			if (IS_ERR(hdl)) {
 				ret = -EINVAL;
@@ -756,6 +765,11 @@ static int rga2_get_img_info(rga_img_info_t *img,
 					goto err_get_sg;
 				}
 			}
+#else
+			ret = -EINVAL;
+			pr_err("ion not available.\n");
+			return ret;
+#endif
 		}
 
 		if (mmu_flag) {
@@ -764,10 +778,14 @@ static int rga2_get_img_info(rga_img_info_t *img,
 			img->uv_addr = img->yrgb_addr + (vir_w * vir_h);
 			img->v_addr = img->uv_addr + (vir_w * vir_h) / 4;
 		} else {
+#if defined(CONFIG_ION_ROCKCHIP)
 			ion_phys(ion_client, hdl, &phy_addr, &len);
 			img->yrgb_addr = phy_addr;
 			img->uv_addr = img->yrgb_addr + (vir_w * vir_h);
 			img->v_addr = img->uv_addr + (vir_w * vir_h) / 4;
+#else
+			pr_err("ion not available.\n");
+#endif
 		}
 	} else {
 		img->yrgb_addr = img->uv_addr;
@@ -775,14 +793,18 @@ static int rga2_get_img_info(rga_img_info_t *img,
 		img->v_addr = img->uv_addr + (vir_w * vir_h) / 4;
 	}
 
+#if defined(CONFIG_ION_ROCKCHIP)
 	if (hdl)
 		ion_free(ion_client, hdl);
+#endif
 
 	return ret;
 
 err_get_sg:
+#if defined(CONFIG_ION_ROCKCHIP)
 	if (hdl)
 		ion_free(ion_client, hdl);
+#endif
 	if (sgt && buf_gem_type_dma)
 		dma_buf_unmap_attachment(attach, sgt, DMA_BIDIRECTIONAL);
 	if (attach) {
